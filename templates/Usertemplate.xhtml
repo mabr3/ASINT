@@ -5,26 +5,51 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
 
 <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.5"></meta>
 
     <style>
         div.background {
             background-color: #00FFFF;
         }
     </style>
-    <title>Administrator browser</title>
+    <title>ASINT Project Dashboard</title>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
 </head>
 <body>
 
 
-<div class="background" id="authenticate">{{LoginId}}</div>
-<div class="background" id="locationspot">(Location will be here)</div>
-<div class="background" id="serverresp">(Server response)</div>
-<h2>Links</h2>
+<div class="background" id="authenticate">{{session.username}}</div>
+<div class="background" id="name">{{session.name}}</div>
+<div class="background" id="locationspot">Getting coordinates...</div>
+<div class="background" id="curr_building">Getting building...</div>
+<div class="background" id="serverresp">Getting server response...</div>
+<div class="background" id="range">Getting current range...</div>
+<div class="background" id="in_build">Getting users in the same building...</div>
+<div class="background" id="in_range">Getting users in the defined range...</div>
+
+<h2>Commands</h2>
+<input type="text" name="" size="20" id="Range" />
+<input type="submit" value="New Range"  id="DefineRange"> Default value for range is 30m (i.e: the building you are in)</input>
+<p></p>
+<input type="text" name="" size="20" id="Messagetosend" />
+<input type="submit" value="Send"  id="Sendbutton"/>
+<p></p>
+<button type="button" id="Recvbutton">Receive Messages</button>
+<div id="fieldMsg">Received Messages:<p></p></div>
+<form action ="/User/Logout" id="LogoutForm"  method = 'post'>
+   <button type ="submit" id="ButtonLogout" value="Logout">Logout</button>
+</form>
+
+
+
+
 
 <script>
  //<![CDATA[
-    var periodiclocal = setInterval(geoLocal,3000);
+
+    geoLocal();
+    var periodiclocal = setInterval(geoLocal,60000);
+    var periodicmsg = setInterval(automsg,5000);
     var x = document.getElementById("locationspot");
     function geoLocal() {
         if (navigator.geolocation) {
@@ -33,30 +58,162 @@
         } else {
         x.innerHTML = "Geolocation is not supported by this browser.";
         }
-    } 
-    function showPosition(position) {
-        x.innerHTML = "Latitude: " + position.coords.latitude + 
-        "<br>Longitude: " + position.coords.longitude; 
     }
+    function automsg(){
+        $( "#Recvbutton" ).trigger( "click" );
+    }
+
+    function showPosition(position) {
+        x.innerHTML = "Latitude: " + position.coords.latitude +
+        "<br>Longitude: " + position.coords.longitude;
+    }
+    function getCurrBuilding(position) {
+        var lat = position.coords.latitude;
+        var lon = position.coords.longitude;
+        $.ajax({
+            url:"/GetBuilding/" + lat +"/" + lon,
+            success : function( response) {
+                if (response['building'] != null){
+                    $("#curr_building").text("You are currently in " + response['building'] + " in campus "+ response['campus']+ " (id: "+response['building_id']+")");
+                    if(response['in_build'] == null){
+                        $("#in_build").text("There are no users in the building.");
+                    }else{
+                        $("#in_build").text("The following users are in the same building: "+response['in_build']);
+                    }
+                    if(response['in_range'] == null){
+                        $("#in_range").text("There are no users in the defined range.");
+                    }else{
+                        $("#in_range").text("The following users are in the defined messaging range: "+response['in_range']);
+                    }
+                }
+                if (response['building'] == null){
+                    $("#curr_building").text("You are currently not in one of the available buildings");
+                    $("#in_build").text("Users in Building functionality unavailable.");
+                    if(response['in_range'] == null){
+                        $("#in_range").text("There are no users in the defined range.");
+                    }else{
+                        $("#in_range").text("The following users are in the defined messaging range: "+response['in_range']);
+                    }
+                }
+            },
+            error : function(){
+                $("#curr_building").text("Getting your building...");
+                $("#in_build").text("Getting users in building...");
+                $("#in_range").text("Getting users in range...");
+            }
+        });
+    }
+
     function postLocation(position){
         var lat = position.coords.latitude;
         var lon = position.coords.longitude;
-        var result = document.getElementById("serverresp");
-        postData = {"name": "istxxxxxx", "location":[lat,lon]};
+
+        var authname = document.getElementById("authenticate");
+        postData = {"name": authname.innerHTML, "location":[lat,lon]};
 
         $.ajax({
             type: "POST",
-            url: "http://127.0.0.1:5000/API/User/PostmyLocation",
+            url: "https://asint1-227912.appspot.com/API/User/PostmyLocation",
             contentType: "application/json; charset=utf-8",
             data:JSON.stringify(postData),
             dataType: 'json',
             success: function (response) {
-                $("#serverresp").text(response[0]["result"]);
+                console.log(response);
+                if(response["result"]==-1){
+                    $( "#LogoutForm" ).trigger( "submit" );
+                }else{
+                    $("#serverresp").text(response["result"]);
+                }
+                $("#range").text("The current messaging range is "+response['range']+"m.");
+                getCurrBuilding(position);
             }
         })
     }
+    $( document ).ready(function() {
+        $( "#Sendbutton" ).click(function( event ) {
+            var authname = document.getElementById("authenticate").innerHTML;
+            $.ajax({
+                type: "POST",
+                url: "https://asint1-227912.appspot.com/API/User/SendBroadMsg",
+                dataType: "json",
+                contentType: "application/json",
+                data: '{"name":"' + authname + '","Message":"' + $("#Messagetosend").val() + '"}',
+                success: function (response) {
+                    if(response["result"]==-1){
+                        $( "#LogoutForm" ).trigger( "submit" );
+                    }else{
+                        $("#serverresp").text(response["result"]);
+                        if(response['in_range']){
+                            $("#in_range").text("The following users are in the defined messaging range: "+response['in_range']);
+                        }
+                    }
+                }
+            });
+            $("#Messagetosend").val('');
+        });
 
+        $( "#LogoutForm" ).submit(function ( event ) {
+            $.ajax({
+                type: "GET",
+                dataType : "jsonp",
+                url: "https://fenix.tecnico.ulisboa.pt/logout",
+            });
+            alert("You have been logged out!");
+        });
 
+        $( "#Recvbutton" ).click(function( event ) {
+            var authname = document.getElementById("authenticate").innerHTML;
+
+            $.ajax({
+                type: "GET",
+                url: "https://asint1-227912.appspot.com/API/User/RecvMsg/"+authname,
+                dataType: "json",
+                contentType: "application/json",
+                success: function (data) {
+                    if(data["result"]==-1){
+                        $( "#LogoutForm" ).trigger( "submit" );
+                    }else{
+                        s = "<ul>";
+                        for (var i = 0, len = data.length; i < len; i++) {
+                            s += "<li>";
+                            s += data[i];
+                            s += "</li>";
+                        }
+                        s += "</ul>";
+                        $("#fieldMsg").append(s);
+                    }
+                }
+            });
+        });
+
+        $( "#DefineRange" ).click(function( event ) {
+            var authname = document.getElementById("authenticate").innerHTML;
+            $.ajax({
+                type: "POST",
+                url: "https://asint1-227912.appspot.com/API/User/DefineRange",
+                dataType: "json",
+                contentType: "application/json",
+                data: '{"name":"' + authname + '","Range":"' + $("#Range").val() + '"}',
+                success: function (response) {
+                    if(response["result"]==-1){
+                        $( "#LogoutForm" ).trigger( "submit" );
+                    }else{
+                        $("#range").text("The current messaging range is "+response['range']+"m.");
+                        $("#serverresp").text(response["result"]);
+                        if(response['in_range'] == null){
+                            $("#in_range").text("There are no users in the defined range.");
+                        }else{
+                            $("#in_range").text("The following users are in the defined messaging range: "+response['in_range']);
+                        }
+                    }
+                },
+                error: function(xhr){
+                    console.log(xhr);
+                }
+            });
+            $("#Range").val('');
+        });
+    });
  //]]>
 </script>
 </body>

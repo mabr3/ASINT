@@ -5,21 +5,41 @@
 <html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
 
 <head>
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1.5"></meta>
 
     <style>
         div.background {
             background-color: #00FFFF;
         }
     </style>
-    <title>Administrator browser</title>
+    <title>ASINT project homepage</title>
     <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
 </head>
 <body>
-<h2>IST Distributed Message App</h2>
 
-<form action="/User/Login" method="get">
-    LoginId:    <input type="text" name="LoginId"><br>
-    <input type="submit" value="Login">
+<center>
+<h2>Welcome to the IST Distributed Message App</h2>
+<h4>If you are already logged in in Fenix, the Login button will take you to the Mainpage, else you'll have to log
+in through Fenix.</h4>
+
+    {% with messages = get_flashed_messages() %}
+         {% if messages %}
+            <ul>
+               {% for message in messages %}
+               <li>{{ message }}</li>
+               {% endfor %}
+            </ul>
+         {% endif %}
+      {% endwith %}
+
+    <form action="/User/Login" method="get">
+        <input type="submit" value="Login"></input>
     </form>
+</center>
+
+
+
 </body>
+
+
 </html>
